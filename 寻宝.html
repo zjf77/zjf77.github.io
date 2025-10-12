@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>神秘寻宝游戏</title>
+    <!-- 引入Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+
+    <!-- 配置Tailwind自定义颜色和字体 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#8B5CF6', // 紫色作为主色调，营造神秘氛围
+                        secondary: '#EC4899', // 粉色作为辅助色
+                        dark: '#1E293B',
+                        light: '#F8FAFC'
+                    },
+                    fontFamily: {
+                        adventure: ['"Trebuchet MS"', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .text-shadow {
+                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            }
+            .location-marker {
+                transition: all 0.3s ease;
+                transform-origin: center bottom;
+            }
+            .location-marker:hover {
+                transform: scale(1.1) rotate(5deg);
+                filter: brightness(1.2);
+            }
+            .panorama-container {
+                perspective: 1000px;
+            }
+            .panorama {
+                transition: transform 1s ease-out;
+                transform-style: preserve-3d;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-dark text-light font-adventure min-h-screen overflow-x-hidden">
+    <!-- 音频元素 - 默认隐藏 -->
+    <audio id="mainTheme" loop>
+        <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="forestTheme" loop>
+        <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="caveTheme" loop>
+        <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="beachTheme" loop>
+        <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3" type="audio/mpeg">
+    </audio>
+
+    <!-- 页面头部 -->
+    <header class="fixed top-0 left-0 right-0 z-50 bg-dark/70 backdrop-blur-md p-4 transition-all duration-300">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-[clamp(1.5rem,3vw,2.5rem)] font-bold text-primary text-shadow">
+                <i class="fa fa-map-signs mr-2"></i>神秘寻宝
+            </h1>
+            <div class="flex items-center space-x-4">
+                <button id="soundToggle" class="text-light hover:text-primary transition-colors">
+                    <i class="fa fa-volume-up text-xl"></i>
+                </button>
+                <button id="resetGame"
+                    class="bg-secondary/80 hover:bg-secondary text-white px-4 py-2 rounded-lg transition-all transform hover:scale-105">
+                    <i class="fa fa-refresh mr-1"></i> 重置游戏
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="container mx-auto pt-20 pb-16 px-4">
+        <!-- 全景页面 -->
+        <section id="panoramaPage" class="min-h-[80vh] flex flex-col justify-center items-center">
+            <h2 class="text-[clamp(1.2rem,2vw,2rem)] mb-6 text-center text-light/90">探索神秘岛屿，寻找隐藏的宝藏</h2>
+
+            <div
+                class="panorama-container w-full max-w-5xl aspect-[21/9] relative rounded-xl overflow-hidden shadow-2xl">
+                <div class="panorama absolute inset-0 bg-cover bg-center"
+                    style="background-image: url('https://picsum.photos/id/1015/1920/1080');">
+                    <!-- 森林地点标记 -->
+                    <div class="location-marker absolute top-[45%] left-[30%] cursor-pointer group"
+                        data-location="forest">
+                        <div
+                            class="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center border-4 border-white shadow-lg animate-pulse">
+                            <i class="fa fa-tree text-white text-xl"></i>
+                        </div>
+                        <div
+                            class="opacity-0 group-hover:opacity-100 absolute -bottom-10 left-1/2 transform -translate-x-1/2 bg-dark/90 text-white px-3 py-1 rounded-lg whitespace-nowrap transition-opacity">
+                            神秘森林
+                        </div>
+                    </div>
+
+                    <!-- 洞穴地点标记 -->
+                    <div class="location-marker absolute top-[60%] left-[60%] cursor-pointer group"
+                        data-location="cave">
+                        <div
+                            class="w-10 h-10 bg-amber-700 rounded-full flex items-center justify-center border-4 border-white shadow-lg animate-pulse">
+                            <i class="fa fa-mountain text-white text-xl"></i>
+                        </div>
+                        <div
+                            class="opacity-0 group-hover:opacity-100 absolute -bottom-10 left-1/2 transform -translate-x-1/2 bg-dark/90 text-white px-3 py-1 rounded-lg whitespace-nowrap transition-opacity">
+                            古老洞穴
+                        </div>
+                    </div>
+
+                    <!-- 海滩地点标记 -->
+                    <div class="location-marker absolute top-[70%] left-[80%] cursor-pointer group"
+                        data-location="beach">
+                        <div
+                            class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center border-4 border-white shadow-lg animate-pulse">
+                            <i class="fa fa-anchor text-white text-xl"></i>
+                        </div>
+                        <div
+                            class="opacity-0 group-hover:opacity-100 absolute -bottom-10 left-1/2 transform -translate-x-1/2 bg-dark/90 text-white px-3 py-1 rounded-lg whitespace-nowrap transition-opacity">
+                            隐秘海滩
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-8 bg-dark/50 backdrop-blur-sm p-6 rounded-xl max-w-3xl w-full border border-primary/30">
+                <h3 class="text-xl text-primary mb-3"><i class="fa fa-book mr-2"></i>游戏日志</h3>
+                <div id="gameLog" class="text-light/80 h-32 overflow-y-auto p-3 bg-dark/70 rounded-lg">
+                    <p>欢迎来到神秘寻宝游戏！点击地图上的标记开始探索。</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 森林页面 -->
+        <section id="forestPage" class="min-h-[80vh] hidden">
+            <div class="flex justify-between items-center mb-6">
+                <button id="backFromForest"
+                    class="bg-primary/80 hover:bg-primary text-white px-4 py-2 rounded-lg transition-all">
+                    <i class="fa fa-arrow-left mr-1"></i> 返回地图
+                </button>
+                <h2 class="text-[clamp(1.5rem,3vw,2rem)] text-center text-primary text-shadow">神秘森林</h2>
+                <div class="w-16"></div> <!-- 占位，保持按钮居中 -->
+            </div>
+
+            <div class="bg-cover bg-center rounded-xl overflow-hidden relative h-[60vh]"
+                style="background-image: url('https://picsum.photos/id/10/1200/800');">
+                <div id="forestClues" class="absolute inset-0 bg-dark/40 flex flex-col justify-center items-center p-6">
+                    <h3 class="text-2xl mb-4 text-white text-shadow">寻找线索...</h3>
+                    <div class="bg-light/90 text-dark p-6 rounded-lg max-w-md w-full">
+                        <p class="mb-4">你走进了一片茂密的森林，阳光透过树叶的缝隙洒下来。</p>
+                        <div id="forestItems" class="space-y-3">
+                            <div class="clue-item p-3 border border-primary/50 rounded-lg cursor-pointer hover:bg-primary/10 transition-colors"
+                                data-clue="forest1">
+                                <p>查看一棵古老的大树</p>
+                            </div>
+                            <div class="clue-item p-3 border border-primary/50 rounded-lg cursor-pointer hover:bg-primary/10 transition-colors"
+                                data-clue="forest2">
+                                <p>检查地上的脚印</p>
+                            </div>
+                            <div class="clue-item p-3 border border-primary/50 rounded-lg cursor-pointer hover:bg-primary/10 transition-colors"
+                                data-clue="forest3">
+                                <p>观察奇怪的石头堆</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 bg-dark/50 backdrop-blur-sm p-6 rounded-xl">
+                <h3 class="text-xl text-primary mb-3"><i class="fa fa-map mr-2"></i>已发现的线索</h3>
+                <div id="forestFoundClues" class="flex flex-wrap gap-3">
+                    <!-- 发现的线索会在这里显示 -->
+                </div>
+            </div>
+        </section>
+
+        <!-- 洞穴页面 -->
+        <section id="cavePage" class="min-h-[80vh] hidden">
+            <div class="flex justify-between items-center mb-6">
+                <button id="backFromCave"
+                    class="bg-primary/80 hover:bg-primary text-white px-4 py-2 rounded-lg transition-all">
+                    <i class="fa fa-arrow-left mr-1"></i> 返回地图
+                </button>
+                <h2 class="text-[clamp(1.5rem,3vw,2rem)] text-center text-primary text-shadow">古老洞穴</h2>
+                <div class="w-16"></div> <!-- 占位，保持按钮居中 -->
+            </div>
+
+            <div class="bg-cover bg-center rounded-xl overflow-hidden relative h-[60vh]"
+                style="background-image: url('https://picsum.photos/id/29/1200/800');">
+                <div id="caveClues" class="absolute inset-0 bg-dark/60 flex flex-col justify-center items-center p-6">
+                    <h3 class="text-2xl mb-4 text-white text-shadow">洞穴深处有什么？</h3>
+                    <div class="bg-light/90 text-dark p-6 rounded-lg max-w-md w-full">
+                        <p class="mb-4">洞穴内阴暗潮湿，墙壁上似乎有奇怪的刻痕。</p>
+                        <div id="caveItems" class="space-y-3">
+                            <div class="clue-item p-3 border border-primary/50 rounded-lg cursor-pointer hover:bg-primary/10 transition-colors"
+                                data-clue="cave1">
+                                <p>研究墙壁上的刻痕</p>
+                            </div>
+                            <div class="clue-item p-3 border border-primary/50 rounded-lg cursor-pointer hover:bg-primary/10 transition-colors"
+                                data-clue="cave2">
+                                <p>探索洞穴深处</p>
+                            </div>
+                            <div class="clue-item p-3 border border-primary/50 rounded-lg cursor-pointer hover:bg-primary/10 transition-colors"
+                                data-clue="cave3">
+                                <p>检查地面上的水洼</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 bg-dark/50 backdrop-blur-sm p-6 rounded-xl">
+                <h3 class="text-xl text-primary mb-3"><i class="fa fa-map mr-2"></i>已发现的线索</h3>
+                <div id="caveFoundClues" class="flex flex-wrap gap-3">
+                    <!-- 发现的线索会在这里显示 -->
+                </div>
+            </div>
+        </section>
+
+        <!-- 海滩页面 -->
+        <section id="beachPage" class="min-h-[80vh] hidden">
+            <div class="flex justify-between items-center mb-6">
+                <button id="backFromBeach"
+                    class="bg-primary/80 hover:bg-primary text-white px-4 py-2 rounded-lg transition-all">
+                    <i class="fa fa-arrow-left mr-1"></i> 返回地图
+                </button>
+                <h2 class="text-[clamp(1.5rem,3vw,2rem)] text-center text-primary text-shadow">隐秘海滩</h2>
+                <div class="w-16"></div> <!-- 占位，保持按钮居中 -->
+            </div>
+
+            <div class="bg-cover bg-center rounded-xl overflow-hidden relative h-[60vh]"
+                style="background-image: url('https://picsum.photos/id/15/1200/800');">
+                <div id="beachClues" class="absolute inset-0 bg-dark/40 flex flex-col justify-center items-center p-6">
+                    <h3 class="text-2xl mb-4 text-white text-shadow">海边的秘密</h3>
+                    <div class="bg-light/90 text-dark p-6 rounded-lg max-w-md w-full">
+                        <p class="mb-4">海浪拍打着沙滩，远处有一块巨大的礁石。</p>
+                        <div id="beachItems" class="space-y-3">
+                            <div class="clue-item p-3 border border-primary/50 rounded-lg cursor-pointer hover:bg-primary/10 transition-colors"
+                                data-clue="beach1">
+                                <p>检查被冲上岸的瓶子</p>
+                            </div>
+                            <div class="clue-item p-3 border border-primary/50 rounded-lg cursor-pointer hover:bg-primary/10 transition-colors"
+                                data-clue="beach2">
+                                <p>探索巨大的礁石</p>
+                            </div>
+                            <div class="clue-item p-3 border border-primary/50 rounded-lg cursor-pointer hover:bg-primary/10 transition-colors"
+                                data-clue="beach3">
+                                <p>挖掘沙滩上的奇怪沙丘</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 bg-dark/50 backdrop-blur-sm p-6 rounded-xl">
+                <h3 class="text-xl text-primary mb-3"><i class="fa fa-map mr-2"></i>已发现的线索</h3>
+                <div id="beachFoundClues" class="flex flex-wrap gap-3">
+                    <!-- 发现的线索会在这里显示 -->
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="bg-dark/80 backdrop-blur-md py-6 border-t border-primary/30">
+        <div class="container mx-auto px-4 text-center text-light/60">
+            <p>神秘寻宝游戏 &copy; 2023 | 探索未知，寻找宝藏</p>
+        </div>
+    </footer>
+
+    <!-- 游戏逻辑脚本 -->
+    <script>
+        // 游戏数据结构
+        const gameData = {
+            soundEnabled: true,
+            currentLocation: 'panorama',
+            visitedLocations: [],
+            foundClues: {
+                forest: [],
+                cave: [],
+                beach: []
+            },
+            gameLog: ["欢迎来到神秘寻宝游戏！点击地图上的标记开始探索。"]
+        };
+
+        // 线索内容
+        const clues = {
+            forest1: "古老的树干上刻着一个奇怪的符号，看起来像指向东方的箭头。",
+            forest2: "这些脚印很大，不像是人类的，它们通向洞穴的方向。",
+            forest3: "石头堆成了一个小型祭坛的样子，中间放着一块光滑的蓝色石头。",
+            cave1: "墙壁上的刻痕描绘了一场暴风雨，船只失事的场景。",
+            cave2: "洞穴深处有一个小水池，水面倒映着星星的图案。",
+            cave3: "水洼里有一块闪亮的金属片，上面刻着'潮汐'两个字。",
+            beach1: "瓶子里有一张纸条，上面写着：'当月亮最圆的时候，礁石会露出秘密'。",
+            beach2: "礁石上有一个隐蔽的凹槽，里面放着一把生锈的钥匙。",
+            beach3: "沙丘下埋着一个旧木箱，但它被锁住了。"
+        };
+
+        // DOM元素
+        const elements = {
+            // 页面
+            panoramaPage: document.getElementById('panoramaPage'),
+            forestPage: document.getElementById('forestPage'),
+            cavePage: document.getElementById('cavePage'),
+            beachPage: document.getElementById('beachPage'),
+
+            // 音频元素
+            mainTheme: document.getElementById('mainTheme'),
+            forestTheme: document.getElementById('forestTheme'),
+            caveTheme: document.getElementById('caveTheme'),
+            beachTheme: document.getElementById('beachTheme'),
+
+            // 按钮
+            soundToggle: document.getElementById('soundToggle'),
+            resetGame: document.getElementById('resetGame'),
+            backFromForest: document.getElementById('backFromForest'),
+            backFromCave: document.getElementById('backFromCave'),
+            backFromBeach: document.getElementById('backFromBeach'),
+
+            // 其他元素
+            gameLog: document.getElementById('gameLog'),
+            locationMarkers: document.querySelectorAll('.location-marker'),
+            clueItems: document.querySelectorAll('.clue-item'),
+            forestFoundClues: document.getElementById('forestFoundClues'),
+            caveFoundClues: document.getElementById('caveFoundClues'),
+            beachFoundClues: document.getElementById('beachFoundClues')
+        };
+
+        // 初始化游戏
+        function initGame() {
+            // 尝试从localStorage加载游戏数据
+            loadGameData();
+
+            // 更新UI以反映游戏状态
+            updateUIFromGameData();
+
+            // 绑定事件监听器
+            bindEventListeners();
+
+            // 播放背景音乐
+            playBackgroundMusic();
+        }
+
+        // 从localStorage加载游戏数据
+        function loadGameData() {
+            const savedData = localStorage.getItem('treasureHuntGameData');
+            if (savedData) {
+                const parsedData = JSON.parse(savedData);
+                // 合并保存的数据到游戏数据中
+                Object.assign(gameData, parsedData);
+            }
+        }
+
+        // 保存游戏数据到localStorage
+        function saveGameData() {
+            localStorage.setItem('treasureHuntGameData', JSON.stringify(gameData));
+        }
+
+        // 更新UI以反映游戏数据
+        function updateUIFromGameData() {
+            // 更新当前位置显示
+            showPage(gameData.currentLocation);
+
+            // 更新音效按钮状态
+            updateSoundButton();
+
+            // 更新游戏日志
+            updateGameLog();
+
+            // 更新已发现的线索
+            updateFoundClues();
+
+            // 标记已访问的地点
+            markVisitedLocations();
+        }
+
+        // 绑定所有事件监听器
+        function bindEventListeners() {
+            // 地点标记点击事件
+            elements.locationMarkers.forEach(marker => {
+                marker.addEventListener('click', () => {
+                    const location = marker.getAttribute('data-location');
+                    goToLocation(location);
+                });
+            });
+
+            // 返回按钮点击事件
+            elements.backFromForest.addEventListener('click', () => goToLocation('panorama'));
+            elements.backFromCave.addEventListener('click', () => goToLocation('panorama'));
+            elements.backFromBeach.addEventListener('click', () => goToLocation('panorama'));
+
+            // 音效开关点击事件
+            elements.soundToggle.addEventListener('click', toggleSound);
+
+            // 重置游戏按钮点击事件
+            elements.resetGame.addEventListener('click', resetGame);
+
+            // 线索项目点击事件
+            elements.clueItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    const clueId = item.getAttribute('data-clue');
+                    const location = clueId.split(/(\d+)/)[0]; // 从线索ID提取地点
+                    findClue(location, clueId);
+                });
+            });
+        }
+
+        // 切换到指定地点
+        function goToLocation(location) {
+            // 更新当前位置
+            gameData.currentLocation = location;
+
+            // 如果是新地点，添加到已访问列表
+            if (location !== 'panorama' && !gameData.visitedLocations.includes(location)) {
+                gameData.visitedLocations.push(location);
+                addToGameLog(`你来到了${getLocationName(location)}`);
+            }
+
+            // 显示相应页面
+            showPage(location);
+
+            // 播放对应地点的背景音乐
+            playBackgroundMusic();
+
+            // 保存游戏数据
+            saveGameData();
+        }
+
+        // 显示指定页面，隐藏其他页面
+        function showPage(page) {
+            // 隐藏所有页面
+            elements.panoramaPage.classList.add('hidden');
+            elements.forestPage.classList.add('hidden');
+            elements.cavePage.classList.add('hidden');
+            elements.beachPage.classList.add('hidden');
+
+            // 显示指定页面
+            switch (page) {
+                case 'panorama':
+                    elements.panoramaPage.classList.remove('hidden');
+                    break;
+                case 'forest':
+                    elements.forestPage.classList.remove('hidden');
+                    break;
+                case 'cave':
+                    elements.cavePage.classList.remove('hidden');
+                    break;
+                case 'beach':
+                    elements.beachPage.classList.remove('hidden');
+                    break;
+            }
+        }
+
+        // 播放背景音乐
+        function playBackgroundMusic() {
+            // 暂停所有音乐
+            elements.mainTheme.pause();
+            elements.forestTheme.pause();
+            elements.caveTheme.pause();
+            elements.beachTheme.pause();
+
+            // 根据当前位置播放相应音乐
+            let currentAudio;
+            switch (gameData.currentLocation) {
+                case 'panorama':
+                    currentAudio = elements.mainTheme;
+                    break;
+                case 'forest':
+                    currentAudio = elements.forestTheme;
+                    break;
+                case 'cave':
+                    currentAudio = elements.caveTheme;
+                    break;
+                case 'beach':
+                    currentAudio = elements.beachTheme;
+                    break;
+            }
+
+            // 如果音效开启，播放音乐
+            if (gameData.soundEnabled && currentAudio) {
+                currentAudio.volume = 0.3;
+                currentAudio.play().catch(e => console.log("播放音乐失败:", e));
+            }
+        }
+
+        // 切换音效开关
+        function toggleSound() {
+            gameData.soundEnabled = !gameData.soundEnabled;
+            updateSoundButton();
+            playBackgroundMusic();
+            saveGameData();
+        }
+
+        // 更新音效按钮显示
+        function updateSoundButton() {
+            const icon = elements.soundToggle.querySelector('i');
+            if (gameData.soundEnabled) {
+                icon.classList.remove('fa-volume-off');
+                icon.classList.add('fa-volume-up');
+            } else {
+                icon.classList.remove('fa-volume-up');
+                icon.classList.add('fa-volume-off');
+            }
+        }
+
+        // 找到线索
+        function findClue(location, clueId) {
+            // 如果已经找到该线索，不重复处理
+            if (gameData.foundClues[location].includes(clueId)) {
+                return;
+            }
+
+            // 添加线索到已发现列表
+            gameData.foundClues[location].push(clueId);
+
+            // 添加到游戏日志
+            addToGameLog(`在${getLocationName(location)}发现了新线索: ${clues[clueId].substring(0, 30)}...`);
+
+            // 更新已发现线索UI
+            updateFoundClues();
+
+            // 检查是否找到所有线索
+            checkAllCluesFound();
+
+            // 保存游戏数据
+            saveGameData();
+        }
+
+        // 更新已发现线索UI
+        function updateFoundClues() {
+            // 清空所有线索容器
+            elements.forestFoundClues.innerHTML = '';
+            elements.caveFoundClues.innerHTML = '';
+            elements.beachFoundClues.innerHTML = '';
+
+            // 显示森林已发现的线索
+            gameData.foundClues.forest.forEach(clueId => {
+                const clueElement = document.createElement('div');
+                clueElement.className = 'bg-primary/20 text-light p-3 rounded-lg max-w-xs';
+                clueElement.innerHTML = `<p class="text-sm">${clues[clueId]}</p>`;
+                elements.forestFoundClues.appendChild(clueElement);
+            });
+
+            // 显示洞穴已发现的线索
+            gameData.foundClues.cave.forEach(clueId => {
+                const clueElement = document.createElement('div');
+                clueElement.className = 'bg-primary/20 text-light p-3 rounded-lg max-w-xs';
+                clueElement.innerHTML = `<p class="text-sm">${clues[clueId]}</p>`;
+                elements.caveFoundClues.appendChild(clueElement);
+            });
+
+            // 显示海滩已发现的线索
+            gameData.foundClues.beach.forEach(clueId => {
+                const clueElement = document.createElement('div');
+                clueElement.className = 'bg-primary/20 text-light p-3 rounded-lg max-w-xs';
+                clueElement.innerHTML = `<p class="text-sm">${clues[clueId]}</p>`;
+                elements.beachFoundClues.appendChild(clueElement);
+            });
+        }
+
+        // 添加到游戏日志
+        function addToGameLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            gameData.gameLog.push(`[${timestamp}] ${message}`);
+
+            // 限制日志长度
+            if (gameData.gameLog.length > 10) {
+                gameData.gameLog.shift();
+            }
+
+            updateGameLog();
+        }
+
+        // 更新游戏日志UI
+        function updateGameLog() {
+            elements.gameLog.innerHTML = '';
+            gameData.gameLog.forEach(entry => {
+                const entryElement = document.createElement('p');
+                entryElement.className = 'mb-1 last:mb-0';
+                entryElement.textContent = entry;
+                elements.gameLog.appendChild(entryElement);
+            });
+
+            // 滚动到底部
+            elements.gameLog.scrollTop = elements.gameLog.scrollHeight;
+        }
+
+        // 标记已访问的地点
+        function markVisitedLocations() {
+            gameData.visitedLocations.forEach(location => {
+                const marker = document.querySelector(`.location-marker[data-location="${location}"]`);
+                if (marker) {
+                    const markerIcon = marker.querySelector('div');
+                    markerIcon.classList.add('ring-4', 'ring-secondary');
+                }
+            });
+        }
+
+        // 检查是否找到所有线索
+        function checkAllCluesFound() {
+            const totalClues = Object.keys(clues).length;
+            let foundCluesCount = 0;
+
+            // 计算已发现的线索总数
+            Object.values(gameData.foundClues).forEach(cluesList => {
+                foundCluesCount += cluesList.length;
+            });
+
+            // 如果找到所有线索，显示胜利消息
+            if (foundCluesCount === totalClues) {
+                setTimeout(() => {
+                    addToGameLog("恭喜你！你找到了所有线索，解开了神秘宝藏的秘密！");
+                    alert("恭喜你！你找到了所有线索，成功完成了寻宝任务！");
+                }, 1000);
+            }
+        }
+
+        // 重置游戏
+        function resetGame() {
+            if (confirm("确定要重置游戏吗？所有进度都将丢失！")) {
+                // 重置游戏数据
+                gameData.soundEnabled = true;
+                gameData.currentLocation = 'panorama';
+                gameData.visitedLocations = [];
+                gameData.foundClues = {
+                    forest: [],
+                    cave: [],
+                    beach: []
+                };
+                gameData.gameLog = ["游戏已重置，开始新的寻宝之旅吧！"];
+
+                // 保存重置后的数据
+                saveGameData();
+
+                // 更新UI
+                updateUIFromGameData();
+
+                // 重新播放背景音乐
+                playBackgroundMusic();
+            }
+        }
+
+        // 辅助函数：获取地点名称
+        function getLocationName(location) {
+            const locationNames = {
+                'forest': '神秘森林',
+                'cave': '古老洞穴',
+                'beach': '隐秘海滩',
+                'panorama': '全景地图'
+            };
+            return locationNames[location] || location;
+        }
+
+        // 页面加载完成后初始化游戏
+        document.addEventListener('DOMContentLoaded', initGame);
+    </script>
+</body>
+
+</html>
