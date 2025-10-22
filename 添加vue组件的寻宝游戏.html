@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vue寻宝游戏</title>
+    <!-- 引入外部资源 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <!-- Tailwind配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#8B5CF6',
+                        secondary: '#EC4899',
+                        dark: '#1E293B',
+                        light: '#F8FAFC'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .text-shadow {
+                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            }
+            .location-marker {
+                transition: all 0.3s ease;
+                transform-origin: center bottom;
+            }
+            .location-marker:hover {
+                transform: scale(1.1) rotate(5deg);
+                filter: brightness(1.2);
+            }
+            .user-menu-item {
+                cursor: pointer;
+                transition: background-color 0.2s;
+            }
+            .user-menu-item:hover {
+                background-color: rgba(139, 92, 246, 0.2);
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-dark text-light min-h-screen">
+    <div id="app" class="flex flex-col min-h-screen">
+        <!-- 应用内容将通过Vue组件渲染 -->
+    </div>
+
+    <script type="module">
+        // 游戏数据存储与管理
+        const GameStore = {
+            // 初始化数据
+            state: {
+                currentUser: null,
+                users: [],
+                currentView: 'login', // login, panorama, forest, cave, beach, ranking
+                soundEnabled: true,
+                visitedLocations: [],
+                foundClues: {
+                    forest: [],
+                    cave: [],
+                    beach: []
+                },
+                gameLog: []
+            },
+
+            // 初始化 - 从localStorage加载数据
+            init() {
+                const savedUsers = localStorage.getItem('treasureHuntUsers');
+                const savedState = localStorage.getItem('treasureHuntState');
+
+                if (savedUsers) {
+                    this.state.users = JSON.parse(savedUsers);
+                }
+
+                if (savedState) {
+                    const parsed = JSON.parse(savedState);
+                    this.state = { ...this.state, ...parsed };
+                }
+            },
+
+            // 保存数据到localStorage
+            save() {
+                localStorage.setItem('treasureHuntUsers', JSON.stringify(this.state.users));
+                localStorage.setItem('treasureHuntState', JSON.stringify({
+                    currentUser: this.state.currentUser,
+                    currentView: this.state.currentView,
+                    soundEnabled: this.state.soundEnabled,
+                    visitedLocations: this.state.visitedLocations,
+                    foundClues: this.state.foundClues,
+                    gameLog: this.state.gameLog
+                }));
+            },
+
+            // 用户登录
+            login(username) {
+                let user = this.state.users.find(u => u.username === username);
+
+                if (!user) {
+                    user = {
+                        username,
+                        score: 0,
+                        lastLogin: new Date().toISOString(),
+                        completed: false
+                    };
+                    this.state.users.push(user);
+                } else {
+                    user.lastLogin = new Date().toISOString();
+                }
+
+                this.state.currentUser = user;
+                this.state.currentView = 'panorama';
+                this.state.gameLog = [`欢迎回来，${username}！开始你的寻宝之旅吧！`];
+                this.save();
+            },
+
+            // 切换视图
+            setView(view) {
+                this.state.currentView = view;
+                this.save();
+            },
+
+            // 切换音效
+            toggleSound() {
+                this.state.soundEnabled = !this.state.soundEnabled;
+                this.save();
+            },
+
+            // 访问地点
+            visitLocation(location) {
+                if (!this.state.visitedLocations.includes(location)) {
+                    this.state.visitedLocations.push(location);
+                    this.addToLog(`你来到了${this.getLocationName(location)}`);
+                    this.updateScore(10);
+                }
+                this.state.currentView = location;
+                this.save();
+            },
+
+            // 找到线索
+            findClue(location, clueId) {
+                if (!this.state.foundClues[location].includes(clueId)) {
+                    this.state.foundClues[location].push(clueId);
+                    const clueText = this.getClueText(clueId);
+                    this.addToLog(`在${this.getLocationName(location)}发现了线索: ${clueText.substring(0, 30)}...`);
+                    this.updateScore(20);
+                    this.checkCompletion();
+                }
+                this.save();
+            },
+
+            // 添加日志
+            addToLog(message) {
+                const timestamp = new Date().toLocaleTimeString();
+                this.state.gameLog.push(`[${timestamp}] ${message}`);
+
+                if (this.state.gameLog.length > 10) {
+                    this.state.gameLog.shift();
+                }
+            },
+
+            // 更新分数
+            updateScore(points) {
+                if (this.state.currentUser) {
+                    this.state.currentUser.score += points;
+                    this.save();
+                }
+            },
+
+            // 检查是否完成游戏
+            checkCompletion() {
+                const totalClues = Object.keys(this.getClues()).length;
+                let foundCluesCount = 0;
+
+                Object.values(this.state.foundClues).forEach(cluesList => {
+                    foundCluesCount += cluesList.length;
+                });
+
+                if (foundCluesCount === totalClues && this.state.currentUser) {
+                    this.state.currentUser.completed = true;
+                    this.updateScore(50);
+                    this.addToLog("恭喜你！你找到了所有线索，解开了神秘宝藏的秘密！");
+                }
+            },
+
+            // 重置游戏
+            resetGame() {
+                this.state.visitedLocations = [];
+                this.state.foundClues = {
+                    forest: [],
+                    cave: [],
+                    beach: []
+                };
+                this.state.gameLog = ["游戏已重置，开始新的寻宝之旅吧！"];
+
+                if (this.state.currentUser) {
+                    this.state.currentUser.score = 0;
+                    this.state.currentUser.completed = false;
+                }
+
+                this.state.currentView = 'panorama';
+                this.save();
+            },
+
+            // 退出登录
+            logout() {
+                this.state.currentUser = null;
+                this.state.currentView = 'login';
+                this.save();
+            },
+
+            // 获取排行榜数据
+            getRanking() {
+                return [...this.state.users].sort((a, b) => {
+                    if (a.completed && !b.completed) return -1;
+                    if (!a.completed && b.completed) return 1;
+                    return b.score - a.score;
+                });
+            },
+
+            // 辅助函数：获取地点名称
+            getLocationName(location) {
+                const names = {
+                    'forest': '神秘森林',
+                    'cave': '古老洞穴',
+                    'beach': '隐秘海滩',
+                    'panorama': '全景地图'
+                };
+                return names[location] || location;
+            },
+
+            // 获取所有线索
+            getClues() {
+                return {
+                    forest1: "古老的树干上刻着一个奇怪的符号，看起来像指向东方的箭头。",
+                    forest2: "这些脚印很大，不像是人类的，它们通向洞穴的方向。",
+                    forest3: "石头堆成了一个小型祭坛的样子，中间放着一块光滑的蓝色石头。",
+                    cave1: "墙壁上的刻痕描绘了一场暴风雨，船只失事的场景。",
+                    cave2: "洞穴深处有一个小水池，水面倒映着星星的图案。",
+                    cave3: "水洼里有一块闪亮的金属片，上面刻着'潮汐'两个字。",
+                    beach1: "瓶子里有一张纸条，上面写着：'当月亮最圆的时候，礁石会露出秘密'。",
+                    beach2: "礁石上有一个隐蔽的凹槽，里面放着一把生锈的钥匙。",
+                    beach3: "沙丘下埋着一个旧木箱，但它被锁住了。"
+                };
+            },
+
+            // 获取线索文本
+            getClueText(clueId) {
+                return this.getClues()[clueId] || '';
+            }
+        };
+
+        // 初始化游戏存储
+        GameStore.init();
+
+        // 音频组件
+        const AudioPlayer = {
+            props: ['location', 'soundEnabled'],
+            data() {
+                return {
+                    audioElements: {
+                        panorama: null,
+                        forest: null,
+                        cave: null,
+                        beach: null
+                    }
+                };
+            },
+            mounted() {
+                this.audioElements.panorama = new Audio('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3');
+                this.audioElements.forest = new Audio('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3');
+                this.audioElements.cave = new Audio('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3');
+                this.audioElements.beach = new Audio('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3');
+
+                Object.values(this.audioElements).forEach(audio => {
+                    audio.loop = true;
+                    audio.volume = 0.3;
+                });
+
+                this.playCurrentAudio();
+            },
+            watch: {
+                location() {
+                    this.playCurrentAudio();
+                },
+                soundEnabled() {
+                    this.playCurrentAudio();
+                }
+            },
+            methods: {
+                playCurrentAudio() {
+                    Object.values(this.audioElements).forEach(audio => audio.pause());
+
+                    if (this.soundEnabled && this.audioElements[this.location]) {
+                        try {
+                            this.audioElements[this.location].play();
+                        } catch (e) {
+                            console.log("播放音频失败:", e);
+                        }
+                    }
+                }
+            },
+            template: `<div class="hidden">音频播放器组件</div>`
+        };
+
+        // 线索项组件
+        const ClueItem = {
+            props: ['clueId', 'location'],
+            methods: {
+                handleClick() {
+                    this.$emit('find-clue', this.location, this.clueId);
+                }
+            },
+            template: `
+                <div 
+                    class="p-3 border border-primary/50 rounded-lg cursor-pointer hover:bg-primary/10 transition-colors"
+                    @click="handleClick"
+                >
+                    <p>
+                        <i class="fa fa-search mr-2 text-primary"></i>
+                        <slot></slot>
+                    </p>
+                </div>
+            `
+        };
+
+        // 发现的线索组件
+        const FoundClue = {
+            props: ['clueText'],
+            template: `
+                <div class="bg-primary/20 text-light p-3 rounded-lg max-w-xs">
+                    <p class="text-sm">
+                        <i class="fa fa-check-circle mr-1 text-secondary"></i>
+                        {{ clueText }}
+                    </p>
+                </div>
+            `
+        };
+
+        // 地点标记组件
+        const LocationMarker = {
+            props: ['location', 'icon', 'color', 'name', 'visited'],
+            template: `
+                <div 
+                    class="location-marker absolute cursor-pointer group"
+                    @click="$emit('visit', location)"
+                >
+                    <div 
+                        class="w-10 h-10 rounded-full flex items-center justify-center border-4 border-white shadow-lg animate-pulse"
+                        :class="color"
+                    >
+                        <i :class="icon" class="text-white text-xl"></i>
+                    </div>
+                    <div class="opacity-0 group-hover:opacity-100 absolute -bottom-10 left-1/2 transform -translate-x-1/2 bg-dark/90 text-white px-3 py-1 rounded-lg whitespace-nowrap transition-opacity">
+                        {{ name }}
+                    </div>
+                    <div v-if="visited" class="absolute -inset-1 rounded-full ring-4 ring-secondary"></div>
+                </div>
+            `
+        };
+
+        // 游戏日志组件
+        const GameLog = {
+            props: ['logs'],
+            template: `
+                <div class="bg-dark/70 rounded-lg p-3 h-32 overflow-y-auto text-light/80 text-sm">
+                    <p v-for="(log, index) in logs" :key="index" class="mb-1 last:mb-0">
+                        {{ log }}
+                    </p>
+                </div>
+            `
+        };
+
+        // 排行榜项组件
+        const RankingItem = {
+            props: ['user', 'index', 'isCurrentUser'],
+            template: `
+                <div class="flex items-center p-3 border-b border-gray-700 last:border-0" :class="isCurrentUser ? 'bg-primary/20' : ''">
+                    <div class="w-10 text-center font-bold">
+                        {{ index + 1 }}.
+                    </div>
+                    <div class="flex-1 ml-3">
+                        <div class="font-medium">{{ user.username }}</div>
+                        <div class="text-sm text-light/60">
+                            分数: {{ user.score }} | 
+                            <span v-if="user.completed" class="text-green-400">已完成</span>
+                            <span v-else>未完成</span>
+                        </div>
+                    </div>
+                    <div v-if="isCurrentUser" class="bg-secondary text-white text-xs px-2 py-1 rounded">
+                        你
+                    </div>
+                </div>
+            `
+        };
+
+        // 登录页面组件
+        const LoginPage = {
+            data() {
+                return {
+                    username: ''
+                };
+            },
+            methods: {
+                handleLogin() {
+                    if (this.username.trim()) {
+                        GameStore.login(this.username.trim());
+                        this.$emit('user-updated');
+                    }
+                }
+            },
+            template: `
+                <div class="flex-1 flex flex-col items-center justify-center p-4">
+                    <div class="w-full max-w-md bg-dark/80 backdrop-blur-sm rounded-xl p-8 border border-primary/30 shadow-xl">
+                        <h1 class="text-3xl font-bold text-primary text-center mb-6">
+                            <i class="fa fa-map-signs mr-2"></i>神秘寻宝
+                        </h1>
+                        
+                        <div class="mb-6">
+                            <label for="username" class="block text-light/80 mb-2">请输入你的名字开始游戏</label>
+                            <div class="flex">
+                                <input 
+                                    type="text" 
+                                    id="username"
+                                    v-model="username"
+                                    class="flex-1 bg-dark border border-primary/50 rounded-l-lg px-4 py-2 text-light focus:outline-none focus:border-primary"
+                                    placeholder="输入你的名字"
+                                    @keyup.enter="handleLogin"
+                                >
+                                <button 
+                                    @click="handleLogin"
+                                    class="bg-primary hover:bg-primary/80 text-white px-4 py-2 rounded-r-lg transition-colors"
+                                >
+                                    开始
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="text-center text-light/60 text-sm">
+                            <p>已有 {{ $root.users.length }} 名探险家参与寻宝</p>
+                        </div>
+                    </div>
+                </div>
+            `
+        };
+
+        // 全景页面组件
+        const PanoramaPage = {
+            components: {
+                LocationMarker,
+                GameLog
+            },
+            template: `
+                <div class="flex-1 p-4">
+                    <h2 class="text-2xl mb-6 text-center text-light/90">探索神秘岛屿，寻找隐藏的宝藏</h2>
+                    
+                    <div class="relative w-full max-w-5xl mx-auto aspect-[21/9] rounded-xl overflow-hidden shadow-2xl mb-8">
+                        <img src="https://picsum.photos/id/1015/1920/1080" alt="岛屿全景" class="w-full h-full object-cover">
+                        
+                        <LocationMarker 
+                            location="forest" 
+                            icon="fa-tree" 
+                            color="bg-green-500" 
+                            name="神秘森林"
+                            :visited="$root.visitedLocations.includes('forest')"
+                            @visit="$emit('visit-location', 'forest')"
+                            style="top: 45%; left: 30%;"
+                        ></LocationMarker>
+                        
+                        <LocationMarker 
+                            location="cave" 
+                            icon="fa-mountain" 
+                            color="bg-amber-700" 
+                            name="古老洞穴"
+                            :visited="$root.visitedLocations.includes('cave')"
+                            @visit="$emit('visit-location', 'cave')"
+                            style="top: 60%; left: 60%;"
+                        ></LocationMarker>
+                        
+                        <LocationMarker 
+                            location="beach" 
+                            icon="fa-anchor" 
+                            color="bg-blue-500" 
+                            name="隐秘海滩"
+                            :visited="$root.visitedLocations.includes('beach')"
+                            @visit="$emit('visit-location', 'beach')"
+                            style="top: 70%; left: 80%;"
+                        ></LocationMarker>
+                    </div>
+                    
+                    <div class="max-w-3xl mx-auto bg-dark/50 backdrop-blur-sm p-6 rounded-xl border border-primary/30">
+                        <h3 class="text-xl text-primary mb-3"><i class="fa fa-book mr-2"></i>游戏日志</h3>
+                        <GameLog :logs="$root.gameLog"></GameLog>
+                    </div>
+                </div>
+            `
+        };
+
+        // 地点页面组件
+        const LocationPage = {
+            components: {
+                ClueItem,
+                FoundClue
+            },
+            props: ['location', 'title', 'background', 'description', 'clues'],
+            methods: {
+                handleClueFound(location, clueId) {
+                    this.$emit('find-clue', location, clueId);
+                }
+            },
+            template: `
+                <div class="flex-1 p-4">
+                    <div class="flex justify-between items-center mb-6">
+                        <button 
+                            @click="$emit('back')"
+                            class="bg-primary/80 hover:bg-primary text-white px-4 py-2 rounded-lg transition-all"
+                        >
+                            <i class="fa fa-arrow-left mr-1"></i> 返回地图
+                        </button>
+                        <h2 class="text-2xl text-center text-primary text-shadow">{{ title }}</h2>
+                        <div class="w-16"></div>
+                    </div>
+                    
+                    <div class="relative w-full max-w-4xl mx-auto rounded-xl overflow-hidden shadow-2xl mb-6" style="height: 60vh;">
+                        <img :src="background" :alt="title" class="w-full h-full object-cover">
+                        <div class="absolute inset-0 bg-dark/50 flex flex-col justify-center items-center p-6">
+                            <h3 class="text-2xl mb-4 text-white text-shadow">寻找线索...</h3>
+                            <div class="bg-light/90 text-dark p-6 rounded-lg max-w-md w-full">
+                                <p class="mb-4">{{ description }}</p>
+                                <div class="space-y-3">
+                                    <ClueItem 
+                                        v-for="(clue, index) in clues" 
+                                        :key="index"
+                                        :clue-id="location + (index + 1)"
+                                        :location="location"
+                                        @find-clue="handleClueFound"
+                                    >
+                                        {{ clue }}
+                                    </ClueItem>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="max-w-4xl mx-auto bg-dark/50 backdrop-blur-sm p-6 rounded-xl border border-primary/30">
+                        <h3 class="text-xl text-primary mb-3"><i class="fa fa-map mr-2"></i>已发现的线索</h3>
+                        <div class="flex flex-wrap gap-3">
+                            <FoundClue 
+                                v-for="clueId in $root.foundClues[location]" 
+                                :key="clueId"
+                                :clue-text="$root.getClueText(clueId)"
+                            ></FoundClue>
+                            
+                            <div v-if="$root.foundClues[location].length === 0" class="text-light/60 italic">
+                                尚未发现任何线索，继续探索吧！
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `
+        };
+
+        // 排行榜页面组件
+        const RankingPage = {
+            components: {
+                RankingItem
+            },
+            template: `
+                <div class="flex-1 p-4">
+                    <div class="max-w-2xl mx-auto">
+                        <div class="flex justify-between items-center mb-6">
+                            <button 
+                                @click="$emit('back')"
+                                class="bg-primary/80 hover:bg-primary text-white px-4 py-2 rounded-lg transition-all"
+                            >
+                                <i class="fa fa-arrow-left mr-1"></i> 返回地图
+                            </button>
+                            <h2 class="text-2xl text-center text-primary text-shadow">寻宝排行榜</h2>
+                            <div class="w-16"></div>
+                        </div>
+                        
+                        <div class="bg-dark/50 backdrop-blur-sm rounded-xl border border-primary/30 shadow-lg overflow-hidden">
+                            <div class="bg-primary/20 p-4 border-b border-primary/30">
+                                <h3 class="text-xl font-bold">探险家排名</h3>
+                            </div>
+                            
+                            <div v-if="$root.ranking.length > 0">
+                                <RankingItem 
+                                    v-for="(user, index) in $root.ranking" 
+                                    :key="user.username"
+                                    :user="user"
+                                    :index="index"
+                                    :is-current-user="$root.currentUser && user.username === $root.currentUser.username"
+                                ></RankingItem>
+                            </div>
+                            
+                            <div v-else class="p-6 text-center text-light/60">
+                                暂无玩家数据
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `
+        };
+
+        // 头部导航组件 - 重点修复用户菜单
+        const Header = {
+            data() {
+                return {
+                    menuOpen: false
+                }
+            },
+            methods: {
+                // 强制打开菜单的方法
+                forceOpenMenu() {
+                    this.menuOpen = true;
+                },
+                // 强制关闭菜单的方法
+                forceCloseMenu() {
+                    this.menuOpen = false;
+                },
+                // 切换菜单状态
+                toggleMenu() {
+                    this.menuOpen = !this.menuOpen;
+                },
+                handleResetGame() {
+                    this.$emit('reset-game');
+                    this.forceCloseMenu();
+                },
+                handleLogout() {
+                    this.$emit('logout');
+                    this.forceCloseMenu();
+                },
+                handleShowRanking() {
+                    this.$emit('show-ranking');
+                    this.forceCloseMenu();
+                }
+            },
+            template: `
+                <header class="bg-dark/70 backdrop-blur-md p-4 border-b border-primary/30">
+                    <div class="container mx-auto flex justify-between items-center">
+                        <h1 class="text-xl md:text-2xl font-bold text-primary">
+                            <i class="fa fa-map-signs mr-2"></i>神秘寻宝
+                        </h1>
+                        
+                        <div class="flex items-center space-x-4">
+                            <button 
+                                @click="$emit('toggle-sound')"
+                                class="text-light hover:text-primary transition-colors"
+                                aria-label="切换声音"
+                            >
+                                <i :class="$root.soundEnabled ? 'fa-volume-up' : 'fa-volume-off'" class="text-xl"></i>
+                            </button>
+                            
+                            <button 
+                                @click="handleShowRanking"
+                                class="hidden md:block bg-secondary/80 hover:bg-secondary text-white px-3 py-1 rounded-lg transition-all text-sm"
+                            >
+                                <i class="fa fa-trophy mr-1"></i> 排行榜
+                            </button>
+                            
+                            <!-- 用户菜单 - 修复版 -->
+                            <div class="relative">
+                                <!-- 菜单按钮 -->
+                                <button 
+                                    @click="toggleMenu"
+                                    class="flex items-center space-x-1 bg-primary/20 hover:bg-primary/30 px-3 py-1.5 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-primary"
+                                    aria-label="用户菜单"
+                                    aria-haspopup="true"
+                                    :aria-expanded="menuOpen"
+                                >
+                                    <i class="fa fa-user"></i>
+                                    <span>{{ $root.currentUser ? $root.currentUser.username : '未知' }}</span>
+                                    <i class="fa fa-caret-down text-xs transition-transform" :class="menuOpen ? 'rotate-180' : ''"></i>
+                                </button>
+                                
+                                <!-- 菜单内容 - 使用v-show确保DOM存在，提高可靠性 -->
+                                <div 
+                                    v-show="menuOpen"
+                                    class="absolute right-0 mt-2 w-48 bg-dark/90 backdrop-blur-md rounded-lg shadow-xl border border-primary/30 py-2 z-50"
+                                    role="menu"
+                                >
+                                    <div class="px-4 py-2 text-sm text-light/60">
+                                        分数: {{ $root.currentUser ? $root.currentUser.score : 0 }}
+                                    </div>
+                                    <div class="border-t border-primary/20 my-1"></div>
+                                    <div 
+                                        @click="handleResetGame"
+                                        class="user-menu-item w-full text-left px-4 py-2 text-sm"
+                                        role="menuitem"
+                                    >
+                                        <i class="fa fa-refresh mr-1"></i> 重置游戏
+                                    </div>
+                                    <div 
+                                        @click="handleLogout"
+                                        class="user-menu-item w-full text-left px-4 py-2 text-sm text-red-400"
+                                        role="menuitem"
+                                    >
+                                        <i class="fa fa-sign-out mr-1"></i> 退出登录
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+            `
+        };
+
+        // 主应用组件
+        const App = {
+            components: {
+                Header,
+                LoginPage,
+                PanoramaPage,
+                LocationPage,
+                RankingPage,
+                AudioPlayer
+            },
+            data() {
+                return {
+                    currentUser: GameStore.state.currentUser,
+                    users: GameStore.state.users,
+                    currentView: GameStore.state.currentView,
+                    soundEnabled: GameStore.state.soundEnabled,
+                    visitedLocations: GameStore.state.visitedLocations,
+                    foundClues: GameStore.state.foundClues,
+                    gameLog: GameStore.state.gameLog
+                };
+            },
+            computed: {
+                ranking() {
+                    return GameStore.getRanking();
+                }
+            },
+            methods: {
+                syncState() {
+                    this.currentUser = GameStore.state.currentUser;
+                    this.users = GameStore.state.users;
+                    this.currentView = GameStore.state.currentView;
+                    this.soundEnabled = GameStore.state.soundEnabled;
+                    this.visitedLocations = GameStore.state.visitedLocations;
+                    this.foundClues = GameStore.state.foundClues;
+                    this.gameLog = GameStore.state.gameLog;
+                },
+
+                setView(view) {
+                    GameStore.setView(view);
+                    this.syncState();
+                },
+
+                toggleSound() {
+                    GameStore.toggleSound();
+                    this.syncState();
+                },
+
+                visitLocation(location) {
+                    GameStore.visitLocation(location);
+                    this.syncState();
+                },
+
+                findClue(location, clueId) {
+                    GameStore.findClue(location, clueId);
+                    this.syncState();
+                },
+
+                resetGame() {
+                    if (confirm("确定要重置游戏吗？所有进度都将丢失！")) {
+                        GameStore.resetGame();
+                        this.syncState();
+                    }
+                },
+
+                logout() {
+                    GameStore.logout();
+                    this.syncState();
+                },
+
+                getClueText(clueId) {
+                    return GameStore.getClueText(clueId);
+                }
+            },
+            template: `
+                <div class="flex flex-col min-h-screen">
+                    <!-- 音频播放器 -->
+                    <AudioPlayer 
+                        :location="currentView === 'ranking' ? 'panorama' : currentView" 
+                        :sound-enabled="soundEnabled"
+                    ></AudioPlayer>
+                    
+                    <!-- 头部导航 -->
+                    <Header 
+                        v-if="currentUser"
+                        @toggle-sound="toggleSound"
+                        @show-ranking="setView('ranking')"
+                        @reset-game="resetGame"
+                        @logout="logout"
+                    ></Header>
+                    
+                    <!-- 登录页面 -->
+                    <LoginPage 
+                        v-if="currentView === 'login'"
+                        @user-updated="syncState"
+                    ></LoginPage>
+                    
+                    <!-- 全景页面 -->
+                    <PanoramaPage 
+                        v-if="currentView === 'panorama'"
+                        @visit-location="visitLocation"
+                    ></PanoramaPage>
+                    
+                    <!-- 森林页面 -->
+                    <LocationPage 
+                        v-if="currentView === 'forest'"
+                        location="forest"
+                        title="神秘森林"
+                        background="https://picsum.photos/id/10/1200/800"
+                        description="你走进了一片茂密的森林，阳光透过树叶的缝隙洒下来。"
+                        :clues="[
+                            '查看一棵古老的大树',
+                            '检查地上的脚印',
+                            '观察奇怪的石头堆'
+                        ]"
+                        @back="setView('panorama')"
+                        @find-clue="findClue"
+                    ></LocationPage>
+                    
+                    <!-- 洞穴页面 -->
+                    <LocationPage 
+                        v-if="currentView === 'cave'"
+                        location="cave"
+                        title="古老洞穴"
+                        background="https://picsum.photos/id/29/1200/800"
+                        description="洞穴内阴暗潮湿，墙壁上似乎有奇怪的刻痕。"
+                        :clues="[
+                            '研究墙壁上的刻痕',
+                            '探索洞穴深处',
+                            '检查地面上的水洼'
+                        ]"
+                        @back="setView('panorama')"
+                        @find-clue="findClue"
+                    ></LocationPage>
+                    
+                    <!-- 海滩页面 -->
+                    <LocationPage 
+                        v-if="currentView === 'beach'"
+                        location="beach"
+                        title="隐秘海滩"
+                        background="https://picsum.photos/id/15/1200/800"
+                        description="海浪拍打着沙滩，远处有一块巨大的礁石。"
+                        :clues="[
+                            '检查被冲上岸的瓶子',
+                            '探索巨大的礁石',
+                            '挖掘沙滩上的奇怪沙丘'
+                        ]"
+                        @back="setView('panorama')"
+                        @find-clue="findClue"
+                    ></LocationPage>
+                    
+                    <!-- 排行榜页面 -->
+                    <RankingPage 
+                        v-if="currentView === 'ranking'"
+                        @back="setView('panorama')"
+                    ></RankingPage>
+                    
+                    <!-- 页脚 -->
+                    <footer class="bg-dark/80 backdrop-blur-md py-4 border-t border-primary/30 text-center text-light/60 text-sm">
+                        <p>神秘寻宝游戏 &copy; 2023</p>
+                    </footer>
+                </div>
+            `
+        };
+
+        // 创建并挂载应用
+        const { createApp } = Vue;
+        createApp(App).mount('#app');
+    </script>
+</body>
+
+</html>
